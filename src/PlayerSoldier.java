@@ -21,34 +21,20 @@ public class PlayerSoldier {
 
     public void update(double deltaTime, Vector2D mainPosition, Vector2D target) {
         if (isMain) {
-            // Главный солдат следует за мышкой с инерцией
-            Vector2D direction = new Vector2D(
-                    target.x - position.x,
-                    target.y - position.y
-            );
-            direction.normalize();
-            direction.multiply(0.1);
+            // Главный солдат получает движение через GameManager
+            // Здесь мы просто обновляем позицию на основе velocity
+            position.x += velocity.x;
+            position.y += velocity.y;
 
-            velocity.x += direction.x;
-            velocity.y += direction.y;
-
-            // Ограничение скорости
+            // Ограничиваем максимальную скорость
             double speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
             if (speed > 5) {
                 velocity.x = (velocity.x / speed) * 5;
                 velocity.y = (velocity.y / speed) * 5;
             }
-
-            // Трение
-            velocity.x *= 0.9;
-            velocity.y *= 0.9;
-
-            position.x += velocity.x;
-            position.y += velocity.y;
         } else {
             // Ведомые солдаты следуют за главным
-            // Позиция в круге вокруг главного солдата
-            double angle = (index * 2 * Math.PI / 6); // Распределение по кругу
+            double angle = (index * 2 * Math.PI / 6);
             double targetX = mainPosition.x + Math.cos(angle) * followDistance;
             double targetY = mainPosition.y + Math.sin(angle) * followDistance;
 

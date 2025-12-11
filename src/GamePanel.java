@@ -6,7 +6,6 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     private GameManager gameManager;
     private Timer gameTimer;
     private long lastUpdateTime;
-    private boolean[] keysPressed = new boolean[256];
 
     public GamePanel() {
         gameManager = new GameManager();
@@ -71,40 +70,17 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         // Обновление игры
         gameManager.update(deltaTime, getWidth(), getHeight());
 
-        // Обработка управления WASD
-        double dx = 0, dy = 0;
-        if (keysPressed[KeyEvent.VK_W] || keysPressed[KeyEvent.VK_UP]) dy -= 1;
-        if (keysPressed[KeyEvent.VK_S] || keysPressed[KeyEvent.VK_DOWN]) dy += 1;
-        if (keysPressed[KeyEvent.VK_A] || keysPressed[KeyEvent.VK_LEFT]) dx -= 1;
-        if (keysPressed[KeyEvent.VK_D] || keysPressed[KeyEvent.VK_RIGHT]) dx += 1;
-
-        // Нормализация диагонального движения
-        if (dx != 0 && dy != 0) {
-            dx *= 0.7071; // 1/√2
-            dy *= 0.7071;
-        }
-
-        if (dx != 0 || dy != 0) {
-            gameManager.movePlayer(dx, dy);
-        }
-
         repaint();
     }
 
     @Override
     public void keyPressed(KeyEvent e) {
-        int keyCode = e.getKeyCode();
-        if (keyCode >= 0 && keyCode < keysPressed.length) {
-            keysPressed[keyCode] = true;
-        }
+        gameManager.setMovementKey(e.getKeyCode(), true);
     }
 
     @Override
     public void keyReleased(KeyEvent e) {
-        int keyCode = e.getKeyCode();
-        if (keyCode >= 0 && keyCode < keysPressed.length) {
-            keysPressed[keyCode] = false;
-        }
+        gameManager.setMovementKey(e.getKeyCode(), false);
     }
 
     @Override

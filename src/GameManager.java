@@ -1,4 +1,6 @@
 import java.awt.*;
+import java.awt.event.KeyEvent;
+import java.awt.geom.Ellipse2D;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -18,6 +20,15 @@ public class GameManager {
     private boolean isShooting = false;
     private Vector2D mousePosition = new Vector2D();
 
+    // Для управления WASD
+    private double playerVelocityX = 0;
+    private double playerVelocityY = 0;
+    private final double PLAYER_SPEED = 3.0;
+    private boolean upPressed = false;
+    private boolean downPressed = false;
+    private boolean leftPressed = false;
+    private boolean rightPressed = false;
+
     public GameManager() {
         squad = new Squad(400, 300);
         enemies = new ArrayList<>();
@@ -30,6 +41,9 @@ public class GameManager {
     public void update(double deltaTime, int screenWidth, int screenHeight) {
         // Обновление отряда
         squad.update(deltaTime);
+
+        // Обработка движения WASD
+        handleMovement(deltaTime, screenWidth, screenHeight);
 
         // Обновление камеры
         camera.update(squad.getMainPosition(), screenWidth, screenHeight);
@@ -92,12 +106,9 @@ public class GameManager {
 
                         enemyIter.remove();
                     }
+                    bulletIter.remove();
                     break;
                 }
-            }
-
-            if (!bullet.isActive()) {
-                bulletIter.remove();
             }
         }
 
@@ -136,6 +147,51 @@ public class GameManager {
                     pos.y < -100 || pos.y > screenHeight + 100) {
                 bulletIter.remove();
             }
+        }
+
+        // Удаление неактивных врагов
+        var enemyIter = enemies.iterator();
+        while (enemyIter.hasNext()) {
+            Enemy enemy = enemyIter.next();
+            if (!enemy.isAlive()) {
+                enemyIter.remove();
+            }
+        }
+    }
+
+    private void handleMovement(double deltaTime, int screenWidth, int screenHeight) {
+        // Сбрасываем скорость
+        double targetVelX = 0;
+        double targetVelY = 0;
+
+        // Устанавливаем скорость в зависимости от нажатых клавиш
+        if (upPressed) targetVelY -= PLAYER_SPEED;
+        if (downPressed) targetVelY += PLAYER_SPEED;
+        if (leftPressed) targetVelX -= PLAYER_SPEED;
+        if (rightPressed) targetVelX += PLAYER_SPEED;
+
+        // Нормализация диагонального движения
+        if (targetVelX != 0 && targetVelY != 0) {
+            targetVelX *= 0.7071; // 1/√2
+            targetVelY *= 0.7071;
+        }
+
+        // Плавное изменение скорости
+        playerVelocityX += (targetVelX - playerVelocityX) * 0.2;
+        playerVelocityY += (targetVelY - playerVelocityY) * 0.2;
+
+        // Применяем скорость к главному солдату
+        if (!squad.getSoldiers().isEmpty()) {
+            PlayerSoldier mainSoldier = squad.getSoldiers().get(0);
+            Vector2D pos = mainSoldier.getPosition();
+
+            // Обновляем позицию
+            pos.x += playerVelocityX;
+            pos.y += playerVelocityY;
+
+            // Ограничение движения границами экрана
+            pos.x = Math.max(50, Math.min(screenWidth - 50, pos.x));
+            pos.y = Math.max(50, Math.min(screenHeight - 50, pos.y));
         }
     }
 
@@ -250,13 +306,17 @@ public class GameManager {
         g2d.setFont(new Font("Arial", Font.PLAIN, 12));
         g2d.drawString("WASD - движение, ЛКМ - стрельба", 10, screenHeight - 30);
 
-        // Крестик прицела
+        // Крестик прицела (используем экранные координаты мыши)
+        // Конвертируем мировые координаты мыши в экранные
+        double screenMouseX = mousePosition.x - camera.getOffsetX();
+        double screenMouseY = mousePosition.y - camera.getOffsetY();
+
         g2d.setColor(new Color(255, 255, 255, 150));
         g2d.setStroke(new BasicStroke(1));
-        g2d.drawLine((int)mousePosition.x - 10, (int)mousePosition.y,
-                (int)mousePosition.x + 10, (int)mousePosition.y);
-        g2d.drawLine((int)mousePosition.x, (int)mousePosition.y - 10,
-                (int)mousePosition.x, (int)mousePosition.y + 10);
+        g2d.drawLine((int)screenMouseX - 10, (int)screenMouseY,
+                (int)screenMouseX + 10, (int)screenMouseY);
+        g2d.drawLine((int)screenMouseX, (int)screenMouseY - 10,
+                (int)screenMouseX, (int)screenMouseY + 10);
     }
 
     // Геттеры и сеттеры
@@ -265,14 +325,31 @@ public class GameManager {
     }
 
     public void setMousePosition(double x, double y) {
+        // Преобразуем экранные координаты в мировые с учетом камеры
         this.mousePosition.x = x + camera.getOffsetX();
         this.mousePosition.y = y + camera.getOffsetY();
         squad.setTargetPosition(this.mousePosition.x, this.mousePosition.y);
     }
 
-    public void movePlayer(double dx, double dy) {
-        Vector2D mainPos = squad.getMainPosition();
-        squad.setTargetPosition(mainPos.x + dx * 5, mainPos.y + dy * 5);
+    public void setMovementKey(int keyCode, boolean pressed) {
+        switch (keyCode) {
+            case KeyEvent.VK_W:
+            case KeyEvent.VK_UP:
+                upPressed = pressed;
+                break;
+            case KeyEvent.VK_S:
+            case KeyEvent.VK_DOWN:
+                downPressed = pressed;
+                break;
+            case KeyEvent.VK_A:
+            case KeyEvent.VK_LEFT:
+                leftPressed = pressed;
+                break;
+            case KeyEvent.VK_D:
+            case KeyEvent.VK_RIGHT:
+                rightPressed = pressed;
+                break;
+        }
     }
 
     public boolean isGameOver() {
