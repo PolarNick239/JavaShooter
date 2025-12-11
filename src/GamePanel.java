@@ -1,0 +1,145 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+
+public class GamePanel extends JPanel implements ActionListener, KeyListener, MouseListener, MouseMotionListener {
+    private GameManager gameManager;
+    private Timer gameTimer;
+    private long lastUpdateTime;
+    private boolean[] keysPressed = new boolean[256];
+
+    public GamePanel() {
+        gameManager = new GameManager();
+
+        setBackground(new Color(20, 20, 40)); // Темно-синий фон
+        setPreferredSize(new Dimension(800, 600));
+        setFocusable(true);
+        requestFocusInWindow();
+
+        addKeyListener(this);
+        addMouseListener(this);
+        addMouseMotionListener(this);
+
+        gameTimer = new Timer(16, this); // ~60 FPS
+        lastUpdateTime = System.nanoTime();
+    }
+
+    public void startGame() {
+        gameTimer.start();
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+
+        Graphics2D g2d = (Graphics2D) g;
+
+        // Включение сглаживания
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_ON);
+
+        // Отрисовка игры
+        gameManager.draw(g2d, getWidth(), getHeight());
+
+        // Если игра окончена
+        if (gameManager.isGameOver()) {
+            g2d.setColor(new Color(0, 0, 0, 200));
+            g2d.fillRect(0, 0, getWidth(), getHeight());
+
+            g2d.setColor(Color.RED);
+            g2d.setFont(new Font("Arial", Font.BOLD, 48));
+            String gameOver = "ИГРА ОКОНЧЕНА";
+            g2d.drawString(gameOver,
+                    getWidth()/2 - g2d.getFontMetrics().stringWidth(gameOver)/2,
+                    getHeight()/2 - 50);
+
+            g2d.setColor(Color.WHITE);
+            g2d.setFont(new Font("Arial", Font.BOLD, 24));
+            String score = "Счет: " + gameManager.getScore();
+            g2d.drawString(score,
+                    getWidth()/2 - g2d.getFontMetrics().stringWidth(score)/2,
+                    getHeight()/2 + 20);
+        }
+    }
+
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        long currentTime = System.nanoTime();
+        double deltaTime = (currentTime - lastUpdateTime) / 1_000_000_000.0;
+        lastUpdateTime = currentTime;
+
+        // Обновление игры
+        gameManager.update(deltaTime, getWidth(), getHeight());
+
+        // Обработка управления WASD
+        double dx = 0, dy = 0;
+        if (keysPressed[KeyEvent.VK_W] || keysPressed[KeyEvent.VK_UP]) dy -= 1;
+        if (keysPressed[KeyEvent.VK_S] || keysPressed[KeyEvent.VK_DOWN]) dy += 1;
+        if (keysPressed[KeyEvent.VK_A] || keysPressed[KeyEvent.VK_LEFT]) dx -= 1;
+        if (keysPressed[KeyEvent.VK_D] || keysPressed[KeyEvent.VK_RIGHT]) dx += 1;
+
+        // Нормализация диагонального движения
+        if (dx != 0 && dy != 0) {
+            dx *= 0.7071; // 1/√2
+            dy *= 0.7071;
+        }
+
+        if (dx != 0 || dy != 0) {
+            gameManager.movePlayer(dx, dy);
+        }
+
+        repaint();
+    }
+
+    @Override
+    public void keyPressed(KeyEvent e) {
+        int keyCode = e.getKeyCode();
+        if (keyCode >= 0 && keyCode < keysPressed.length) {
+            keysPressed[keyCode] = true;
+        }
+    }
+
+    @Override
+    public void keyReleased(KeyEvent e) {
+        int keyCode = e.getKeyCode();
+        if (keyCode >= 0 && keyCode < keysPressed.length) {
+            keysPressed[keyCode] = false;
+        }
+    }
+
+    @Override
+    public void keyTyped(KeyEvent e) {}
+
+    @Override
+    public void mousePressed(MouseEvent e) {
+        if (e.getButton() == MouseEvent.BUTTON1) {
+            gameManager.setShooting(true);
+        }
+    }
+
+    @Override
+    public void mouseReleased(MouseEvent e) {
+        if (e.getButton() == MouseEvent.BUTTON1) {
+            gameManager.setShooting(false);
+        }
+    }
+
+    @Override
+    public void mouseMoved(MouseEvent e) {
+        gameManager.setMousePosition(e.getX(), e.getY());
+    }
+
+    @Override
+    public void mouseDragged(MouseEvent e) {
+        gameManager.setMousePosition(e.getX(), e.getY());
+    }
+
+    @Override
+    public void mouseClicked(MouseEvent e) {}
+
+    @Override
+    public void mouseEntered(MouseEvent e) {}
+
+    @Override
+    public void mouseExited(MouseEvent e) {}
+}

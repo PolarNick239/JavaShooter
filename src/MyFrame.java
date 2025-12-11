@@ -1,26 +1,21 @@
 import javax.swing.*;
 import java.awt.*;
-import java.awt.image.BufferStrategy;
 
 public class MyFrame extends JFrame {
+    private GamePanel gamePanel;
+
     public MyFrame() {
-        setSize(640, 480);
+        setTitle("Шутер");
+        setSize(800, 600);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
 
-        setVisible(true); // делаем окно видимым только после того как оно полностью готово
-    }
+        gamePanel = new GamePanel();
+        add(gamePanel);
 
-    @Override
-    public void paint(Graphics g) {
-        BufferStrategy bufferStrategy = getBufferStrategy(); // Обращаемся к стратегии буферизации
-        if (bufferStrategy == null) { // Если она еще не создана
-            createBufferStrategy(2); // то создаем ее
-            bufferStrategy = getBufferStrategy(); // и опять обращаемся к уже наверняка созданной стратегии
-        }
-        g = bufferStrategy.getDrawGraphics(); // Достаем текущую графику (текущий буфер) - это наш холст для рисования (спрятанный от глаз пользователя)
-        g.clearRect(0, 0, getWidth(), getHeight()); // Очищаем наш холст (ведь там остался предыдущий кадр)
+        setVisible(true);
 
-        g.dispose();                // Освободить все временные ресурсы графики (после этого в нее уже нельзя рисовать)
-        bufferStrategy.show();      // Сказать буферизирующей стратегии отрисовать новый буфер (т.е. поменять показываемый и обновляемый буферы местами)
+        // Запуск игрового цикла
+        gamePanel.startGame();
     }
 }
