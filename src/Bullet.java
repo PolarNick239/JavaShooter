@@ -65,4 +65,8 @@ public class Bullet {
     public Vector2D getPosition() {
         return position;
     }
+
+    public int getDamage() {
+        return damage;
+    }
 }
