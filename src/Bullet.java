@@ -1,5 +1,6 @@
 import java.awt.*;
 import java.awt.geom.Ellipse2D;
+import java.util.List;
 
 public class Bullet {
     private Vector2D position;
@@ -19,9 +20,22 @@ public class Bullet {
         velocity.multiply(10); // Скорость пули
     }
 
-    public void update() {
+    public void update(List<Obstacle> obstacles) {
+        if (!isActive) return;
+
         position.x += velocity.x;
         position.y += velocity.y;
+
+        // Проверка столкновения с препятствиями
+        for (Obstacle obstacle : obstacles) {
+            if (!obstacle.isActive()) continue;
+
+            if (obstacle.collidesWithCircle(position.x, position.y, radius)) {
+                obstacle.takeDamage(damage);
+                isActive = false;
+                return;
+            }
+        }
     }
 
     public void draw(Graphics2D g2d, Camera camera) {

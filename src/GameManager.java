@@ -4,6 +4,7 @@ import java.awt.geom.Ellipse2D;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Random;
 
 public class GameManager {
     private Squad squad;
@@ -11,6 +12,7 @@ public class GameManager {
     private List<Bullet> bullets;
     private List<Particle> particles;
     private List<Bonus> bonuses;
+    private List<Obstacle> obstacles;
     private Camera camera;
 
     private int score = 0;
@@ -35,15 +37,79 @@ public class GameManager {
         bullets = new ArrayList<>();
         particles = new ArrayList<>();
         bonuses = new ArrayList<>();
+        obstacles = new ArrayList<>();
         camera = new Camera();
+
+        // Генерируем случайные препятствия
+        generateObstacles();
+    }
+
+    private void generateObstacles() {
+        Random random = new Random();
+
+        // Генерируем несколько стенок из коробок
+        int numWalls = 5 + random.nextInt(3); // 5-7 стенок
+
+        for (int w = 0; w < numWalls; w++) {
+            // Случайная позиция для стены
+            double wallX = 100 + random.nextInt(600);
+            double wallY = 100 + random.nextInt(400);
+
+            // Случайная ориентация стены (горизонтальная или вертикальная)
+            boolean horizontal = random.nextBoolean();
+            int wallLength = 3 + random.nextInt(4); // 3-6 коробок
+
+            for (int i = 0; i < wallLength; i++) {
+                double x, y;
+
+                if (horizontal) {
+                    x = wallX + i * 50;
+                    y = wallY;
+                } else {
+                    x = wallX;
+                    y = wallY + i * 50;
+                }
+
+                // Проверяем, не слишком ли близко к начальной позиции игрока
+                double distanceToPlayer = Math.sqrt(Math.pow(x - 400, 2) + Math.pow(y - 300, 2));
+                if (distanceToPlayer > 100) {
+                    obstacles.add(new Obstacle(x, y));
+                }
+            }
+        }
+
+        // Добавляем несколько отдельных коробок
+        int numSingleBoxes = 8 + random.nextInt(5); // 8-12 отдельных коробок
+
+        for (int i = 0; i < numSingleBoxes; i++) {
+            double x = 50 + random.nextInt(700);
+            double y = 50 + random.nextInt(500);
+
+            // Проверяем расстояние до игрока и других препятствий
+            double distanceToPlayer = Math.sqrt(Math.pow(x - 400, 2) + Math.pow(y - 300, 2));
+            boolean tooClose = false;
+
+            for (Obstacle existing : obstacles) {
+                double dx = x - existing.getPosition().x;
+                double dy = y - existing.getPosition().y;
+                if (Math.sqrt(dx*dx + dy*dy) < 60) {
+                    tooClose = true;
+                    break;
+                }
+            }
+
+            if (distanceToPlayer > 120 && !tooClose) {
+                obstacles.add(new Obstacle(x, y));
+            }
+        }
     }
 
     public void update(double deltaTime, int screenWidth, int screenHeight) {
-        // Обновление отряда
-        squad.update(deltaTime);
-
         // Обработка движения WASD
         handleMovement(deltaTime, screenWidth, screenHeight);
+
+        // Обновление отряда с препятствиями
+        squad.update(deltaTime, obstacles);
 
         // Обновление камеры
         camera.update(squad.getMainPosition(), screenWidth, screenHeight);
@@ -55,9 +121,9 @@ public class GameManager {
             enemySpawnTimer = 0;
         }
 
-        // Обновление врагов
+        // Обновление врагов с препятствиями
         for (Enemy enemy : enemies) {
-            enemy.update(deltaTime, squad.getMainPosition());
+            enemy.update(deltaTime, squad.getMainPosition(), obstacles);
 
             // Проверка столкновения с игроком
             for (PlayerSoldier soldier : squad.getSoldiers()) {
@@ -69,6 +135,15 @@ public class GameManager {
             }
         }
 
+        // Удаляем мертвых врагов (с использованием итератора для безопасного удаления)
+        Iterator<Enemy> enemyIterator = enemies.iterator();
+        while (enemyIterator.hasNext()) {
+            Enemy enemy = enemyIterator.next();
+            if (!enemy.isAlive()) {
+                enemyIterator.remove();
+            }
+        }
+
         // Стрельба
         if (isShooting && shootCooldown <= 0) {
             shoot();
@@ -76,19 +151,15 @@ public class GameManager {
         }
         shootCooldown -= deltaTime;
 
-        // Обновление пуль
-        for (Bullet bullet : bullets) {
-            bullet.update();
-        }
+        // Обновление пуль с препятствиями
+        Iterator<Bullet> bulletIterator = bullets.iterator();
+        while (bulletIterator.hasNext()) {
+            Bullet bullet = bulletIterator.next();
+            bullet.update(obstacles);
 
-        // Проверка столкновений пуль с врагами
-        Iterator<Bullet> bulletIter = bullets.iterator();
-        while (bulletIter.hasNext()) {
-            Bullet bullet = bulletIter.next();
-
-            Iterator<Enemy> enemyIter = enemies.iterator();
-            while (enemyIter.hasNext()) {
-                Enemy enemy = enemyIter.next();
+            // Проверка столкновений пуль с врагами
+            boolean bulletRemoved = false;
+            for (Enemy enemy : enemies) {
                 if (bullet.checkCollision(enemy)) {
                     if (enemy.takeDamage(bullet.getDamage())) {
                         // Враг убит
@@ -103,12 +174,16 @@ public class GameManager {
                                     enemy.getPosition().y
                             ));
                         }
-
-                        enemyIter.remove();
                     }
-                    bulletIter.remove();
+                    bulletIterator.remove();
+                    bulletRemoved = true;
                     break;
                 }
+            }
+
+            // Если пуля не была удалена при столкновении с врагом, проверяем ее активность
+            if (!bulletRemoved && !bullet.isActive()) {
+                bulletIterator.remove();
             }
         }
 
@@ -129,34 +204,19 @@ public class GameManager {
             bonus.update();
 
             // Проверка столкновения с игроком
+            boolean bonusCollected = false;
             for (PlayerSoldier soldier : squad.getSoldiers()) {
                 if (bonus.checkCollision(soldier.getPosition(), soldier.getRadius())) {
                     applyBonus(bonus);
                     bonusIter.remove();
+                    bonusCollected = true;
                     break;
                 }
             }
         }
 
-        // Удаление вышедших за границы пуль
-        bulletIter = bullets.iterator();
-        while (bulletIter.hasNext()) {
-            Bullet bullet = bulletIter.next();
-            Vector2D pos = bullet.getPosition();
-            if (pos.x < -100 || pos.x > screenWidth + 100 ||
-                    pos.y < -100 || pos.y > screenHeight + 100) {
-                bulletIter.remove();
-            }
-        }
-
-        // Удаление неактивных врагов
-        var enemyIter = enemies.iterator();
-        while (enemyIter.hasNext()) {
-            Enemy enemy = enemyIter.next();
-            if (!enemy.isAlive()) {
-                enemyIter.remove();
-            }
-        }
+        // Удаляем разрушенные препятствия
+        obstacles.removeIf(obstacle -> !obstacle.isActive());
     }
 
     private void handleMovement(double deltaTime, int screenWidth, int screenHeight) {
@@ -183,13 +243,12 @@ public class GameManager {
         // Применяем скорость к главному солдату
         if (!squad.getSoldiers().isEmpty()) {
             PlayerSoldier mainSoldier = squad.getSoldiers().get(0);
-            Vector2D pos = mainSoldier.getPosition();
 
-            // Обновляем позицию
-            pos.x += playerVelocityX;
-            pos.y += playerVelocityY;
+            // Устанавливаем скорость для солдата
+            mainSoldier.setVelocity(playerVelocityX, playerVelocityY);
 
             // Ограничение движения границами экрана
+            Vector2D pos = mainSoldier.getPosition();
             pos.x = Math.max(50, Math.min(screenWidth - 50, pos.x));
             pos.y = Math.max(50, Math.min(screenHeight - 50, pos.y));
         }
@@ -249,6 +308,11 @@ public class GameManager {
     }
 
     public void draw(Graphics2D g2d, int screenWidth, int screenHeight) {
+        // Отрисовка препятствий
+        for (Obstacle obstacle : obstacles) {
+            obstacle.draw(g2d, camera);
+        }
+
         // Отрисовка отряда
         squad.draw(g2d, camera);
 
@@ -302,12 +366,19 @@ public class GameManager {
         g2d.setColor(Color.WHITE);
         g2d.drawString("Отряд: " + squad.getSize() + " солдат", 20, 70);
 
+        // Количество препятствий
+        g2d.setColor(new Color(0, 0, 0, 150));
+        g2d.fillRect(10, 90, 200, 30);
+
+        g2d.setColor(Color.WHITE);
+        g2d.drawString("Препятствия: " + obstacles.size(), 20, 110);
+
         // Инструкции
         g2d.setFont(new Font("Arial", Font.PLAIN, 12));
         g2d.drawString("WASD - движение, ЛКМ - стрельба", 10, screenHeight - 30);
+        g2d.drawString("Коричневые коробки - препятствия", 10, screenHeight - 50);
 
         // Крестик прицела (используем экранные координаты мыши)
-        // Конвертируем мировые координаты мыши в экранные
         double screenMouseX = mousePosition.x - camera.getOffsetX();
         double screenMouseY = mousePosition.y - camera.getOffsetY();
 

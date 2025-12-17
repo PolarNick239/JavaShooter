@@ -27,9 +27,9 @@ public class Squad {
         soldiers.add(new PlayerSoldier(x, y, color, isMain, soldiers.size()));
     }
 
-    public void update(double deltaTime) {
+    public void update(double deltaTime, List<Obstacle> obstacles) {
         for (PlayerSoldier soldier : soldiers) {
-            soldier.update(deltaTime, soldiers.get(0).getPosition(), targetPosition);
+            soldier.update(deltaTime, soldiers.get(0).getPosition(), targetPosition, obstacles);
         }
     }
 

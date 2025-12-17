@@ -1,5 +1,6 @@
 import java.awt.*;
 import java.awt.geom.Ellipse2D;
+import java.util.List;
 
 public class PlayerSoldier {
     private Vector2D position;
@@ -19,19 +20,36 @@ public class PlayerSoldier {
         this.followDistance = 30 + index * 15; // Солдаты следуют с разным отступом
     }
 
-    public void update(double deltaTime, Vector2D mainPosition, Vector2D target) {
+    public void update(double deltaTime, Vector2D mainPosition, Vector2D target, List<Obstacle> obstacles) {
+        Vector2D oldPosition = position.copy();
+
         if (isMain) {
             // Главный солдат получает движение через GameManager
             // Здесь мы просто обновляем позицию на основе velocity
             position.x += velocity.x;
             position.y += velocity.y;
 
-            // Ограничиваем максимальную скорость
-            double speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
-            if (speed > 5) {
-                velocity.x = (velocity.x / speed) * 5;
-                velocity.y = (velocity.y / speed) * 5;
+            // Проверка столкновений с препятствиями
+            for (Obstacle obstacle : obstacles) {
+                if (!obstacle.isActive()) continue;
+
+                if (obstacle.collidesWithCircle(position.x, position.y, radius)) {
+                    // Возвращаем на старую позицию
+                    position = oldPosition;
+
+                    // И отталкиваемся от препятствия
+                    Vector2D push = new Vector2D(position.x - obstacle.getPosition().x,
+                            position.y - obstacle.getPosition().y);
+                    push.normalize();
+                    velocity.x = push.x * 2;
+                    velocity.y = push.y * 2;
+                    break;
+                }
             }
+
+            // Трение
+            velocity.x *= 0.9;
+            velocity.y *= 0.9;
         } else {
             // Ведомые солдаты следуют за главным
             double angle = (index * 2 * Math.PI / 6);
@@ -41,6 +59,21 @@ public class PlayerSoldier {
             // Плавное движение к целевой позиции
             position.x += (targetX - position.x) * 0.1;
             position.y += (targetY - position.y) * 0.1;
+
+            // Проверка столкновений с препятствиями для ведомых солдат
+            for (Obstacle obstacle : obstacles) {
+                if (!obstacle.isActive()) continue;
+
+                if (obstacle.collidesWithCircle(position.x, position.y, radius)) {
+                    // Отталкиваемся от препятствия
+                    Vector2D push = new Vector2D(position.x - obstacle.getPosition().x,
+                            position.y - obstacle.getPosition().y);
+                    push.normalize();
+                    position.x += push.x * 2;
+                    position.y += push.y * 2;
+                    break;
+                }
+            }
         }
     }
 
@@ -61,6 +94,15 @@ public class PlayerSoldier {
             g2d.setStroke(new BasicStroke(2));
             g2d.draw(circle);
         }
+
+        // Маленький глаз для ориентации
+        g2d.setColor(Color.BLACK);
+        g2d.fillOval(
+                (int)(position.x + radius * 0.5 - camera.getOffsetX()),
+                (int)(position.y - radius * 0.3 - camera.getOffsetY()),
+                (int)(radius * 0.6),
+                (int)(radius * 0.6)
+        );
     }
 
     public Vector2D getPosition() {
