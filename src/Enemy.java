@@ -121,8 +121,8 @@ public class Enemy {
                 0
         ));
         g2d.fill(new Ellipse2D.Double(
-                position.x - radius * 0.7 - camera.getOffsetX(),
-                position.y - radius * 0.7 - camera.getOffsetY(),
+                position.x - radius * 0.7 * healthRatio - camera.getOffsetX(),
+                position.y - radius * 0.7 * healthRatio - camera.getOffsetY(),
                 radius * 1.4 * healthRatio,
                 radius * 1.4 * healthRatio
         ));
