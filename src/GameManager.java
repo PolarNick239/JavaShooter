@@ -14,6 +14,7 @@ public class GameManager {
     private List<Bonus> bonuses;
     private List<Obstacle> obstacles;
     private Camera camera;
+    private Grid grid;
 
     private int score = 0;
     private int playerHealth = 100;
@@ -31,7 +32,9 @@ public class GameManager {
     private boolean leftPressed = false;
     private boolean rightPressed = false;
 
-    public GameManager() {
+    private final double CELL_SIZE = 40.0;
+
+    public GameManager(int screenWidth, int screenHeight) {
         squad = new Squad(400, 300);
         enemies = new ArrayList<>();
         bullets = new ArrayList<>();
@@ -39,6 +42,9 @@ public class GameManager {
         bonuses = new ArrayList<>();
         obstacles = new ArrayList<>();
         camera = new Camera();
+
+        // Создаем сетку
+        grid = new Grid(screenWidth, screenHeight, CELL_SIZE);
 
         // Генерируем случайные препятствия
         generateObstacles();
@@ -63,17 +69,19 @@ public class GameManager {
                 double x, y;
 
                 if (horizontal) {
-                    x = wallX + i * 50;
+                    x = wallX + i * CELL_SIZE;
                     y = wallY;
                 } else {
                     x = wallX;
-                    y = wallY + i * 50;
+                    y = wallY + i * CELL_SIZE;
                 }
 
                 // Проверяем, не слишком ли близко к начальной позиции игрока
                 double distanceToPlayer = Math.sqrt(Math.pow(x - 400, 2) + Math.pow(y - 300, 2));
                 if (distanceToPlayer > 100) {
-                    obstacles.add(new Obstacle(x, y));
+                    Obstacle obstacle = new Obstacle(x, y);
+                    obstacles.add(obstacle);
+                    grid.setObstacle(obstacle);
                 }
             }
         }
@@ -99,7 +107,9 @@ public class GameManager {
             }
 
             if (distanceToPlayer > 120 && !tooClose) {
-                obstacles.add(new Obstacle(x, y));
+                Obstacle obstacle = new Obstacle(x, y);
+                obstacles.add(obstacle);
+                grid.setObstacle(obstacle);
             }
         }
     }
@@ -121,9 +131,9 @@ public class GameManager {
             enemySpawnTimer = 0;
         }
 
-        // Обновление врагов с препятствиями
+        // Обновление врагов с сеткой
         for (Enemy enemy : enemies) {
-            enemy.update(deltaTime, squad.getMainPosition(), obstacles);
+            enemy.update(deltaTime, squad.getMainPosition(), grid);
 
             // Проверка столкновения с игроком
             for (PlayerSoldier soldier : squad.getSoldiers()) {
@@ -215,8 +225,15 @@ public class GameManager {
             }
         }
 
-        // Удаляем разрушенные препятствия
-        obstacles.removeIf(obstacle -> !obstacle.isActive());
+        // Удаляем разрушенные препятствия и обновляем сетку
+        Iterator<Obstacle> obstacleIter = obstacles.iterator();
+        while (obstacleIter.hasNext()) {
+            Obstacle obstacle = obstacleIter.next();
+            if (!obstacle.isActive()) {
+                grid.removeObstacle(obstacle);
+                obstacleIter.remove();
+            }
+        }
     }
 
     private void handleMovement(double deltaTime, int screenWidth, int screenHeight) {
@@ -265,7 +282,8 @@ public class GameManager {
             y = Math.random() < 0.5 ? -50 : screenHeight + 50;
         }
 
-        enemies.add(new Enemy(x, y, squad.getMainPosition()));
+        Enemy enemy = new Enemy(x, y, squad.getMainPosition());
+        enemies.add(enemy);
     }
 
     private void shoot() {

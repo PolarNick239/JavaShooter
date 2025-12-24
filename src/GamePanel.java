@@ -8,10 +8,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     private long lastUpdateTime;
 
     public GamePanel() {
-        gameManager = new GameManager();
+        // Передаем размеры в GameManager
+        Dimension size = new Dimension(800, 600);
+        gameManager = new GameManager(size.width, size.height);
 
         setBackground(new Color(20, 20, 40)); // Темно-синий фон
-        setPreferredSize(new Dimension(800, 600));
+        setPreferredSize(size);
         setFocusable(true);
         requestFocusInWindow();
 
