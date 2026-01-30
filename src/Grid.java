@@ -96,6 +96,45 @@ public class Grid {
         return neighbors;
     }
 
+    public boolean hasLineOfSight(GridCell from, GridCell to) {
+        if (from == null || to == null) return false;
+        int x0 = from.col;
+        int y0 = from.row;
+        int x1 = to.col;
+        int y1 = to.row;
+
+        int dx = Math.abs(x1 - x0);
+        int dy = Math.abs(y1 - y0);
+        int sx = x0 < x1 ? 1 : -1;
+        int sy = y0 < y1 ? 1 : -1;
+        int err = dx - dy;
+
+        int x = x0;
+        int y = y0;
+        while (true) {
+            GridCell cell = getCellAtGridPos(y, x);
+            if (cell != null && !cell.walkable) {
+                if (cell.equals(to)) {
+                    return true;
+                }
+                return false;
+            }
+            if (x == x1 && y == y1) {
+                break;
+            }
+            int e2 = 2 * err;
+            if (e2 > -dy) {
+                err -= dy;
+                x += sx;
+            }
+            if (e2 < dx) {
+                err += dx;
+                y += sy;
+            }
+        }
+        return true;
+    }
+
     public void updateDistanceField(Vector2D target) {
         distanceFieldReady = false;
         distanceTarget = getCellAtWorldPos(target.x, target.y);

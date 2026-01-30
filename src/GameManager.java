@@ -54,6 +54,13 @@ public class GameManager {
     private LevelConfig levelConfig;
     private int worldWidth;
     private int worldHeight;
+    private boolean[][] visibleCells;
+    private boolean[][] seenObstacleCells;
+    private int fogRows;
+    private int fogCols;
+    private java.awt.image.BufferedImage fogLayer;
+    private int fogLayerW;
+    private int fogLayerH;
 
     private static final double BASE_SHOOT_COOLDOWN = 0.1;
     private static final double BASE_GRENADE_COOLDOWN = 1.5;
@@ -146,6 +153,7 @@ public class GameManager {
         updateParticles(deltaTime);
         updateBonuses(deltaTime);
         updateObstacles();
+        updateVisibility();
 
         if (killsThisLevel >= killsToAdvance) {
             nextLevel();
@@ -442,6 +450,8 @@ public class GameManager {
             bonus.draw(g2d, camera);
         }
 
+        drawFog(g2d, screenWidth, screenHeight);
+
         drawUI(g2d, screenWidth, screenHeight);
     }
 
@@ -581,6 +591,7 @@ public class GameManager {
 
         grid = new Grid(worldWidth, worldHeight, CELL_SIZE);
         generateObstacles(config);
+        resetFog();
 
         if (resetPlayer) {
             squad.resetPosition(worldWidth / 2.0, worldHeight / 2.0);
@@ -758,6 +769,122 @@ public class GameManager {
         }
 
         return config;
+    }
+
+    private void resetFog() {
+        visibleCells = null;
+        seenObstacleCells = null;
+        fogRows = 0;
+        fogCols = 0;
+        fogLayer = null;
+        fogLayerW = 0;
+        fogLayerH = 0;
+    }
+
+    private void ensureFogArrays() {
+        if (grid == null) return;
+        int rows = grid.getRows();
+        int cols = grid.getCols();
+        if (visibleCells == null || rows != fogRows || cols != fogCols) {
+            visibleCells = new boolean[rows][cols];
+            seenObstacleCells = new boolean[rows][cols];
+            fogRows = rows;
+            fogCols = cols;
+        }
+    }
+
+    private void updateVisibility() {
+        if (grid == null || squad == null) return;
+        ensureFogArrays();
+        if (visibleCells == null) return;
+
+        for (int r = 0; r < fogRows; r++) {
+            for (int c = 0; c < fogCols; c++) {
+                visibleCells[r][c] = false;
+            }
+        }
+
+        Vector2D playerPos = squad.getMainPosition();
+        GridCell playerCell = grid.getCellAtWorldPos(playerPos.x, playerPos.y);
+        if (playerCell == null) return;
+
+        double radius = worldWidth * 0.4;
+        double radiusSq = radius * radius;
+
+        for (int r = 0; r < fogRows; r++) {
+            for (int c = 0; c < fogCols; c++) {
+                GridCell cell = grid.getCellAtGridPos(r, c);
+                if (cell == null) continue;
+                double dx = cell.worldX - playerPos.x;
+                double dy = cell.worldY - playerPos.y;
+                if (dx * dx + dy * dy > radiusSq) {
+                    continue;
+                }
+                if (grid.hasLineOfSight(playerCell, cell)) {
+                    visibleCells[r][c] = true;
+                }
+            }
+        }
+
+        for (int r = 0; r < fogRows; r++) {
+            for (int c = 0; c < fogCols; c++) {
+                if (!visibleCells[r][c]) continue;
+                GridCell cell = grid.getCellAtGridPos(r, c);
+                if (cell == null) continue;
+                if (cell.obstacle != null && cell.obstacle.isActive()) {
+                    seenObstacleCells[r][c] = true;
+                } else {
+                    seenObstacleCells[r][c] = false;
+                }
+            }
+        }
+    }
+
+    private void drawFog(Graphics2D g2d, int screenWidth, int screenHeight) {
+        if (visibleCells == null || grid == null) return;
+        if (fogLayer == null || fogLayerW != screenWidth || fogLayerH != screenHeight) {
+            fogLayerW = screenWidth;
+            fogLayerH = screenHeight;
+            fogLayer = new java.awt.image.BufferedImage(screenWidth, screenHeight,
+                    java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        }
+
+        Graphics2D fg = fogLayer.createGraphics();
+        fg.setComposite(AlphaComposite.Src);
+        fg.setColor(Color.BLACK);
+        fg.fillRect(0, 0, screenWidth, screenHeight);
+
+        fg.setComposite(AlphaComposite.Clear);
+        double cellSize = grid.getCellSize();
+        int size = (int) Math.ceil(cellSize) + 1;
+
+        for (int r = 0; r < fogRows; r++) {
+            for (int c = 0; c < fogCols; c++) {
+                if (!visibleCells[r][c]) continue;
+                GridCell cell = grid.getCellAtGridPos(r, c);
+                if (cell == null) continue;
+                int x = (int) Math.floor(cell.worldX - cellSize / 2 - camera.getOffsetX());
+                int y = (int) Math.floor(cell.worldY - cellSize / 2 - camera.getOffsetY());
+                fg.fillRect(x, y, size, size);
+            }
+        }
+
+        fg.setComposite(AlphaComposite.SrcOver);
+        fg.setColor(new Color(15, 15, 15));
+        for (int r = 0; r < fogRows; r++) {
+            for (int c = 0; c < fogCols; c++) {
+                if (visibleCells[r][c]) continue;
+                if (!seenObstacleCells[r][c]) continue;
+                GridCell cell = grid.getCellAtGridPos(r, c);
+                if (cell == null) continue;
+                int x = (int) Math.floor(cell.worldX - cellSize / 2 - camera.getOffsetX());
+                int y = (int) Math.floor(cell.worldY - cellSize / 2 - camera.getOffsetY());
+                fg.fillRect(x, y, size, size);
+            }
+        }
+
+        fg.dispose();
+        g2d.drawImage(fogLayer, 0, 0, null);
     }
 
     private enum LevelTheme {
