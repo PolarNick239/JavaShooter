@@ -44,6 +44,18 @@ public class Squad {
         targetPosition.y = y;
     }
 
+    public void resetPosition(double x, double y) {
+        if (soldiers.isEmpty()) return;
+        soldiers.get(0).setPosition(x, y);
+        for (int i = 1; i < soldiers.size(); i++) {
+            double angle = (i * 2 * Math.PI / 6);
+            double distance = 30 + i * 15;
+            double sx = x + Math.cos(angle) * distance;
+            double sy = y + Math.sin(angle) * distance;
+            soldiers.get(i).setPosition(sx, sy);
+        }
+    }
+
     public List<PlayerSoldier> getSoldiers() {
         return soldiers;
     }

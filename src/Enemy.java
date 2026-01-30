@@ -1,5 +1,6 @@
 import java.awt.*;
 import java.awt.geom.Ellipse2D;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -9,59 +10,63 @@ public class Enemy {
     private double radius = 15;
     private Color color;
     private int health = 100;
+    private int maxHealth = 100;
     private boolean isAlive = true;
     private double speed;
+    private BufferedImage skin;
 
-    // Для поиска пути
+    private static final String[] SKIN_PATHS = {
+            "/data/enemy_1.png",
+            "/data/enemy_2.png",
+            "/data/enemy_3.png"
+    };
+    private static final BufferedImage[] SKINS = loadSkins(SKIN_PATHS);
+
     private List<GridCell> currentPath = new ArrayList<>();
     private double pathUpdateTimer = 0;
-    private static final double PATH_UPDATE_INTERVAL = 0.5; // секунды
+    private static final double PATH_UPDATE_INTERVAL = 0.5;
 
-    public Enemy(double x, double y, Vector2D target) {
+    public Enemy(double x, double y, double speed, int maxHealth) {
         this.position = new Vector2D(x, y);
-        this.velocity = new Vector2D(); // ИНИЦИАЛИЗАЦИЯ ВЕКТОРА СКОРОСТИ
+        this.velocity = new Vector2D();
         this.color = new Color(200, 50, 50);
-        this.speed = 1 + Math.random() * 2;
+        this.speed = speed;
+        this.maxHealth = maxHealth;
+        this.health = maxHealth;
+        this.skin = pickSkin();
     }
 
     public void update(double deltaTime, Vector2D target, Grid grid) {
         if (!isAlive) return;
 
-        // Обновляем путь с интервалом
         pathUpdateTimer += deltaTime;
         if (pathUpdateTimer >= PATH_UPDATE_INTERVAL) {
-            updatePath(grid, target);
+            updatePath(grid);
             pathUpdateTimer = 0;
         }
 
-        // Двигаемся по пути, если он есть
         if (!currentPath.isEmpty()) {
             followPath(deltaTime, grid);
         } else {
-            // Старая логика движения напрямую (на случай, если путь не найден)
             moveDirectly(deltaTime, target);
         }
     }
 
-    private void updatePath(Grid grid, Vector2D target) {
+    private void updatePath(Grid grid) {
         GridCell start = grid.getCellAtWorldPos(position.x, position.y);
-        GridCell end = grid.getCellAtWorldPos(target.x, target.y);
-
-        if (start != null && end != null && !start.equals(end)) {
-            currentPath = Pathfinder.findPath(grid, start, end);
-        } else {
+        if (start == null || !grid.hasDistanceField()) {
             currentPath.clear();
+            return;
         }
+        currentPath = grid.buildPathFrom(start, 60);
     }
 
     private void followPath(double deltaTime, Grid grid) {
         if (currentPath.isEmpty()) return;
 
-        // Берем первую ячейку в пути
         GridCell targetCell = currentPath.get(0);
         Vector2D targetPos = new Vector2D(targetCell.worldX, targetCell.worldY);
 
-        // Направление к цели
         Vector2D direction = new Vector2D(targetPos.x - position.x, targetPos.y - position.y);
         double distance = direction.distanceTo(new Vector2D(0, 0));
 
@@ -74,14 +79,12 @@ public class Enemy {
             position.y += velocity.y;
         }
 
-        // Если достигли ячейки, удаляем ее из пути
         if (distance < 5) {
             currentPath.remove(0);
         }
     }
 
     private void moveDirectly(double deltaTime, Vector2D target) {
-        // Прямое движение к цели (запасной вариант)
         Vector2D direction = new Vector2D(target.x - position.x, target.y - position.y);
         double distance = direction.distanceTo(new Vector2D(0, 0));
 
@@ -95,25 +98,26 @@ public class Enemy {
         }
     }
 
-    public void draw(Graphics2D g2d, Camera camera) {
+    public void draw(Graphics2D g2d, Camera camera, boolean showPath) {
         if (!isAlive) return;
 
-        // Основной круг
-        Ellipse2D.Double circle = new Ellipse2D.Double(
-                position.x - radius - camera.getOffsetX(),
-                position.y - radius - camera.getOffsetY(),
-                radius * 2,
-                radius * 2
-        );
+        double drawX = position.x - radius - camera.getOffsetX();
+        double drawY = position.y - radius - camera.getOffsetY();
 
-        // Цвет врага
-        Color currentColor = color;
+        if (skin != null) {
+            g2d.drawImage(skin, (int) drawX, (int) drawY, (int) (radius * 2), (int) (radius * 2), null);
+        } else {
+            Ellipse2D.Double circle = new Ellipse2D.Double(
+                    drawX,
+                    drawY,
+                    radius * 2,
+                    radius * 2
+            );
+            g2d.setColor(color);
+            g2d.fill(circle);
+        }
 
-        g2d.setColor(currentColor);
-        g2d.fill(circle);
-
-        // Индикатор здоровья
-        double healthRatio = health / 100.0;
+        double healthRatio = maxHealth > 0 ? (health / (double) maxHealth) : 0;
         g2d.setColor(new Color(
                 (int)(255 * (1 - healthRatio)),
                 (int)(255 * healthRatio),
@@ -126,21 +130,20 @@ public class Enemy {
                 radius * 1.4 * healthRatio
         ));
 
-        // Глаза для лучшей видимости
-        g2d.setColor(Color.BLACK);
-        g2d.fillOval(
-                (int)(position.x - radius * 0.3 - camera.getOffsetX()),
-                (int)(position.y - radius * 0.3 - camera.getOffsetY()),
-                (int)(radius * 0.6),
-                (int)(radius * 0.6)
-        );
+        if (skin == null) {
+            g2d.setColor(Color.BLACK);
+            g2d.fillOval(
+                    (int)(position.x - radius * 0.3 - camera.getOffsetX()),
+                    (int)(position.y - radius * 0.3 - camera.getOffsetY()),
+                    (int)(radius * 0.6),
+                    (int)(radius * 0.6)
+            );
+        }
 
-        // Визуализация пути (отладка)
-        if (!currentPath.isEmpty()) {
+        if (showPath && !currentPath.isEmpty()) {
             g2d.setColor(new Color(0, 255, 0, 100));
             g2d.setStroke(new BasicStroke(2));
 
-            // Линия от врага к следующей ячейке
             GridCell nextCell = currentPath.get(0);
             g2d.drawLine(
                     (int)(position.x - camera.getOffsetX()),
@@ -149,7 +152,6 @@ public class Enemy {
                     (int)(nextCell.worldY - camera.getOffsetY())
             );
 
-            // Точки пути
             for (int i = 0; i < currentPath.size(); i++) {
                 GridCell cell = currentPath.get(i);
                 g2d.setColor(new Color(0, 255, 0, Math.min(255, 100 + i * 50)));
@@ -166,7 +168,7 @@ public class Enemy {
         health -= damage;
         if (health <= 0) {
             isAlive = false;
-            return true; // Враг убит
+            return true;
         }
         return false;
     }
@@ -185,5 +187,23 @@ public class Enemy {
 
     public int getHealth() {
         return health;
+    }
+
+    private static BufferedImage[] loadSkins(String[] paths) {
+        List<BufferedImage> list = new ArrayList<>();
+        for (String path : paths) {
+            try {
+                list.add(Assets.loadImage(path));
+            } catch (Exception e) {
+                // ignore missing skins
+            }
+        }
+        return list.toArray(new BufferedImage[0]);
+    }
+
+    private static BufferedImage pickSkin() {
+        if (SKINS.length == 0) return null;
+        int idx = (int) Math.floor(Math.random() * SKINS.length);
+        return SKINS[idx];
     }
 }

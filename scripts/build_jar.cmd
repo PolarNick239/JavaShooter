@@ -61,6 +61,8 @@ set "EXITCODE=0"
 :finish
 echo.
 if /i "%CI%"=="true" goto :nopause
+if /i "%CI%"=="1" goto :nopause
+if defined CI goto :nopause
 if /i "%NO_PAUSE%"=="1" goto :nopause
 pause
 :nopause

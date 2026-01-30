@@ -3,9 +3,7 @@ import java.awt.geom.AffineTransform;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 
 public class Obstacle {
     private Vector2D position;
@@ -22,33 +20,27 @@ public class Obstacle {
     static {
         // Загружаем изображения при первой загрузке класса
         try {
-            boxImage = loadImage("/data/box.png");
-            crackImage = loadImage("/data/crack.png");
+            boxImage = Assets.loadImage("/data/box.png");
+            crackImage = Assets.loadImage("/data/crack.png");
         } catch (IOException e) {
             System.err.println("Не удалось загрузить изображения коробки: " + e.getMessage());
         }
     }
 
-    private static BufferedImage loadImage(String resourcePath) throws IOException {
-        try (InputStream in = Obstacle.class.getResourceAsStream(resourcePath)) {
-            if (in != null) {
-                BufferedImage image = ImageIO.read(in);
-                if (image == null) {
-                    throw new IOException("Unsupported image format: " + resourcePath);
-                }
-                return image;
-            }
-        }
-        String filePath = resourcePath.startsWith("/") ? resourcePath.substring(1) : resourcePath;
-        BufferedImage image = ImageIO.read(new File(filePath));
-        if (image == null) {
-            throw new IOException("Image not found or unsupported: " + filePath);
-        }
-        return image;
+    public Obstacle(double x, double y) {
+        this(x, y, 40, 40, 100);
     }
 
-    public Obstacle(double x, double y) {
+    public Obstacle(double x, double y, double size, int maxHealth) {
+        this(x, y, size, size, maxHealth);
+    }
+
+    public Obstacle(double x, double y, double width, double height, int maxHealth) {
         this.position = new Vector2D(x, y);
+        this.width = width;
+        this.height = height;
+        this.maxHealth = maxHealth;
+        this.health = maxHealth;
     }
 
     public void takeDamage(int damage) {

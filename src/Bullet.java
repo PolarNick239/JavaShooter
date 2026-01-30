@@ -10,9 +10,10 @@ public class Bullet {
     private int damage = 25;
     private boolean isActive = true;
 
-    public Bullet(double startX, double startY, double targetX, double targetY, Color color) {
+    public Bullet(double startX, double startY, double targetX, double targetY, Color color, int damage) {
         this.position = new Vector2D(startX, startY);
         this.color = color;
+        this.damage = damage;
 
         // Направление к цели
         velocity = new Vector2D(targetX - startX, targetY - startY);

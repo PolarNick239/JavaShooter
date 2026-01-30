@@ -1,5 +1,7 @@
 import java.awt.*;
 import java.awt.geom.Ellipse2D;
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
 import java.util.List;
 
 public class PlayerSoldier {
@@ -7,9 +9,16 @@ public class PlayerSoldier {
     private Vector2D velocity;
     private double radius = 10;
     private Color color;
-    private boolean isMain; // Главный солдат (управляется игроком)
-    private double followDistance; // Дистанция следования за главным солдатом
-    private int index; // Индекс в отряде
+    private boolean isMain;
+    private double followDistance;
+    private int index;
+    private BufferedImage skin;
+
+    private static final String[] SKIN_PATHS = {
+            "/data/player_1.png",
+            "/data/player_2.png"
+    };
+    private static final BufferedImage[] SKINS = loadSkins(SKIN_PATHS);
 
     public PlayerSoldier(double x, double y, Color color, boolean isMain, int index) {
         this.position = new Vector2D(x, y);
@@ -17,27 +26,22 @@ public class PlayerSoldier {
         this.color = color;
         this.isMain = isMain;
         this.index = index;
-        this.followDistance = 30 + index * 15; // Солдаты следуют с разным отступом
+        this.followDistance = 30 + index * 15;
+        this.skin = pickSkin(index);
     }
 
     public void update(double deltaTime, Vector2D mainPosition, Vector2D target, List<Obstacle> obstacles) {
         Vector2D oldPosition = position.copy();
 
         if (isMain) {
-            // Главный солдат получает движение через GameManager
-            // Здесь мы просто обновляем позицию на основе velocity
             position.x += velocity.x;
             position.y += velocity.y;
 
-            // Проверка столкновений с препятствиями
             for (Obstacle obstacle : obstacles) {
                 if (!obstacle.isActive()) continue;
 
                 if (obstacle.collidesWithCircle(position.x, position.y, radius)) {
-                    // Возвращаем на старую позицию
                     position = oldPosition;
-
-                    // И отталкиваемся от препятствия
                     Vector2D push = new Vector2D(position.x - obstacle.getPosition().x,
                             position.y - obstacle.getPosition().y);
                     push.normalize();
@@ -47,25 +51,20 @@ public class PlayerSoldier {
                 }
             }
 
-            // Трение
             velocity.x *= 0.9;
             velocity.y *= 0.9;
         } else {
-            // Ведомые солдаты следуют за главным
             double angle = (index * 2 * Math.PI / 6);
             double targetX = mainPosition.x + Math.cos(angle) * followDistance;
             double targetY = mainPosition.y + Math.sin(angle) * followDistance;
 
-            // Плавное движение к целевой позиции
             position.x += (targetX - position.x) * 0.1;
             position.y += (targetY - position.y) * 0.1;
 
-            // Проверка столкновений с препятствиями для ведомых солдат
             for (Obstacle obstacle : obstacles) {
                 if (!obstacle.isActive()) continue;
 
                 if (obstacle.collidesWithCircle(position.x, position.y, radius)) {
-                    // Отталкиваемся от препятствия
                     Vector2D push = new Vector2D(position.x - obstacle.getPosition().x,
                             position.y - obstacle.getPosition().y);
                     push.normalize();
@@ -78,9 +77,22 @@ public class PlayerSoldier {
     }
 
     public void draw(Graphics2D g2d, Camera camera) {
+        double drawX = position.x - radius - camera.getOffsetX();
+        double drawY = position.y - radius - camera.getOffsetY();
+
+        if (skin != null) {
+            g2d.drawImage(skin, (int) drawX, (int) drawY, (int) (radius * 2), (int) (radius * 2), null);
+            if (isMain) {
+                g2d.setColor(Color.WHITE);
+                g2d.setStroke(new BasicStroke(2));
+                g2d.drawOval((int) drawX, (int) drawY, (int) (radius * 2), (int) (radius * 2));
+            }
+            return;
+        }
+
         Ellipse2D.Double circle = new Ellipse2D.Double(
-                position.x - radius - camera.getOffsetX(),
-                position.y - radius - camera.getOffsetY(),
+                drawX,
+                drawY,
                 radius * 2,
                 radius * 2
         );
@@ -88,14 +100,12 @@ public class PlayerSoldier {
         g2d.setColor(color);
         g2d.fill(circle);
 
-        // Обводка для главного солдата
         if (isMain) {
             g2d.setColor(Color.WHITE);
             g2d.setStroke(new BasicStroke(2));
             g2d.draw(circle);
         }
 
-        // Маленький глаз для ориентации
         g2d.setColor(Color.BLACK);
         g2d.fillOval(
                 (int)(position.x + radius * 0.5 - camera.getOffsetX()),
@@ -116,5 +126,30 @@ public class PlayerSoldier {
     public void setVelocity(double vx, double vy) {
         this.velocity.x = vx;
         this.velocity.y = vy;
+    }
+
+    public void setPosition(double x, double y) {
+        this.position.x = x;
+        this.position.y = y;
+        this.velocity.x = 0;
+        this.velocity.y = 0;
+    }
+
+    private static BufferedImage[] loadSkins(String[] paths) {
+        List<BufferedImage> list = new ArrayList<>();
+        for (String path : paths) {
+            try {
+                list.add(Assets.loadImage(path));
+            } catch (Exception e) {
+                // ignore missing skins
+            }
+        }
+        return list.toArray(new BufferedImage[0]);
+    }
+
+    private static BufferedImage pickSkin(int index) {
+        if (SKINS.length == 0) return null;
+        int idx = Math.abs(index) % SKINS.length;
+        return SKINS[idx];
     }
 }

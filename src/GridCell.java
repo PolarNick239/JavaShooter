@@ -9,6 +9,7 @@ public class GridCell {
     // Для A*
     public GridCell parent;
     public double gCost, hCost;
+    public double distance = Double.POSITIVE_INFINITY;
 
     public GridCell(int row, int col, double worldX, double worldY) {
         this.row = row;
