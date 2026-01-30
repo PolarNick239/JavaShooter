@@ -66,6 +66,7 @@ public class TankBoss implements Boss {
                 speed, damage, ttl, radius
         );
         game.addBossProjectile(shell);
+        SoundManager.playBossShot();
     }
 
     @Override

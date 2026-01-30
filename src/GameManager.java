@@ -64,6 +64,8 @@ public class GameManager {
     private int fogLayerW;
     private int fogLayerH;
     private boolean bossLevel = false;
+    private double enemyHitSoundTimer = 0;
+    private double playerHitSoundTimer = 0;
 
     private static final double BASE_SHOOT_COOLDOWN = 0.1;
     private static final double BASE_GRENADE_COOLDOWN = 1.5;
@@ -99,6 +101,12 @@ public class GameManager {
         }
         if (grenadeCooldownTimer > 0) {
             grenadeCooldownTimer -= deltaTime;
+        }
+        if (enemyHitSoundTimer > 0) {
+            enemyHitSoundTimer -= deltaTime;
+        }
+        if (playerHitSoundTimer > 0) {
+            playerHitSoundTimer -= deltaTime;
         }
         if (explosiveShotsTimer > 0) {
             explosiveShotsTimer -= deltaTime;
@@ -137,6 +145,7 @@ public class GameManager {
                     if (distance < soldier.getRadius() + enemy.getRadius()) {
                         playerHealth -= 1;
                         camera.shake(5, 0.3);
+                        playPlayerHitSound();
                     }
                 }
             }
@@ -150,6 +159,7 @@ public class GameManager {
                 if (distance < boss.getRadius() + 12) {
                     playerHealth = Math.max(0, playerHealth - 1);
                     camera.shake(4, 0.2);
+                    playPlayerHitSound();
                 }
             }
         }
@@ -260,6 +270,7 @@ public class GameManager {
                         projectile.getExplosionRadius(),
                         projectile.getDamage(),
                         true, 8, 0.4);
+                SoundManager.playGrenadeExplosion();
             } else if (!remove && projectile.getKind() == BossProjectile.Kind.BULLET) {
                 if (!godMode) {
                     double minDistance = Double.POSITIVE_INFINITY;
@@ -271,6 +282,7 @@ public class GameManager {
                     }
                     if (minDistance <= projectile.getRadius() + 8) {
                         playerHealth = Math.max(0, playerHealth - projectile.getDamage());
+                        playPlayerHitSound();
                         remove = true;
                     }
                 }
@@ -288,6 +300,7 @@ public class GameManager {
                                 projectile.getExplosionRadius(),
                                 projectile.getDamage(),
                                 true, 10, 0.5);
+                        SoundManager.playGrenadeExplosion();
                         remove = true;
                     }
                 }
@@ -403,6 +416,7 @@ public class GameManager {
                     damage
             ));
         }
+        SoundManager.playShoot();
     }
 
     private void explodeAt(Vector2D position, double radius, int damage,
@@ -420,6 +434,7 @@ public class GameManager {
         createExplosionEffect(position, new Color(255, 140, 90), 18, 4, 10, 2, 7);
         camera.shake(12, 0.6);
         applyExplosionDamage(position, radius, damage, true);
+        SoundManager.playGrenadeExplosion();
     }
 
     private void applyExplosionDamage(Vector2D position, double radius, int damage, boolean affectPlayer) {
@@ -461,6 +476,9 @@ public class GameManager {
             if (minDistance <= radius + 10) {
                 int scaled = scaleDamage(damage, minDistance, radius);
                 playerHealth = Math.max(0, playerHealth - scaled);
+                if (scaled > 0) {
+                    playPlayerHitSound();
+                }
             }
         }
     }
@@ -475,6 +493,8 @@ public class GameManager {
         if (!enemy.isAlive()) return;
         if (enemy.takeDamage(damage)) {
             onEnemyKilled(enemy);
+        } else {
+            playEnemyHitSound();
         }
     }
 
@@ -491,6 +511,7 @@ public class GameManager {
         camera.shake(14, 0.8);
         score += 1000;
         killsThisLevel = killsToAdvance;
+        SoundManager.playBossDeath();
     }
 
     private void onEnemyKilled(Enemy enemy) {
@@ -498,6 +519,7 @@ public class GameManager {
         camera.shake(10, 0.5);
         score += 100;
         killsThisLevel += 1;
+        SoundManager.playEnemyDeath();
 
         if (Math.random() < 0.3) {
             bonuses.add(new Bonus(
@@ -552,6 +574,21 @@ public class GameManager {
             case EXPLOSIVE_SHOTS:
                 explosiveShotsTimer = Math.max(explosiveShotsTimer, EXPLOSIVE_SHOTS_DURATION);
                 break;
+        }
+        SoundManager.playBonus();
+    }
+
+    private void playEnemyHitSound() {
+        if (enemyHitSoundTimer <= 0) {
+            SoundManager.playHit();
+            enemyHitSoundTimer = 0.05;
+        }
+    }
+
+    private void playPlayerHitSound() {
+        if (playerHitSoundTimer <= 0) {
+            SoundManager.playPlayerHit();
+            playerHitSoundTimer = 0.1;
         }
     }
 
@@ -711,6 +748,7 @@ public class GameManager {
         grenades.add(new Grenade(pos.x, pos.y, mousePosition.x, mousePosition.y));
         grenadesLeft -= 1;
         grenadeCooldownTimer = BASE_GRENADE_COOLDOWN;
+        SoundManager.playGrenadeThrow();
     }
 
     public void addBossProjectile(BossProjectile projectile) {
@@ -741,6 +779,7 @@ public class GameManager {
     private void nextLevel() {
         level += 1;
         applyLevelConfig(buildLevelConfig(level), true);
+        SoundManager.playLevelUp();
     }
 
     private void applyLevelConfig(LevelConfig config, boolean resetPlayer) {
@@ -780,6 +819,7 @@ public class GameManager {
             } else if (config.theme == LevelTheme.BOSS_HELI) {
                 boss = new HelicopterBoss(worldWidth / 2.0, 90, config.bossHealth);
             }
+            SoundManager.playBossSpawn();
         }
         resetFog();
 

@@ -56,6 +56,7 @@ public class HelicopterBoss implements Boss {
                 dropTimer = 0.3;
                 dropsLeft--;
                 game.spawnEnemyAt(position.x, position.y + 30);
+                SoundManager.playDrop();
             }
 
             if ((dashDirection > 0 && position.x > game.getWorldWidth() + 80) ||
@@ -98,6 +99,7 @@ public class HelicopterBoss implements Boss {
                 8.5, 8, 2.5
         );
         game.addBossProjectile(bullet);
+        SoundManager.playBossShot();
     }
 
     private void startDash(GameManager game) {
@@ -107,6 +109,7 @@ public class HelicopterBoss implements Boss {
         position.y = 70 + Math.random() * 60;
         dropsLeft = 3 + (int) Math.floor(Math.random() * 3);
         dropTimer = 0.2;
+        SoundManager.playBossDash();
     }
 
     @Override
