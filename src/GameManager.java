@@ -16,6 +16,8 @@ public class GameManager {
     private List<Obstacle> obstacles;
     private Camera camera;
     private Grid grid;
+    private Boss boss;
+    private List<BossProjectile> bossProjectiles;
 
     private int score = 0;
     private int playerHealth = 100;
@@ -61,6 +63,7 @@ public class GameManager {
     private java.awt.image.BufferedImage fogLayer;
     private int fogLayerW;
     private int fogLayerH;
+    private boolean bossLevel = false;
 
     private static final double BASE_SHOOT_COOLDOWN = 0.1;
     private static final double BASE_GRENADE_COOLDOWN = 1.5;
@@ -81,6 +84,7 @@ public class GameManager {
         enemies = new ArrayList<>();
         bullets = new ArrayList<>();
         grenades = new ArrayList<>();
+        bossProjectiles = new ArrayList<>();
         particles = new ArrayList<>();
         bonuses = new ArrayList<>();
         obstacles = new ArrayList<>();
@@ -115,9 +119,13 @@ public class GameManager {
             pathFieldTimer = 0;
         }
 
-        enemySpawnTimer += deltaTime;
-        if (enemySpawnTimer >= enemySpawnInterval) {
-            spawnEnemy();
+        if (!bossLevel) {
+            enemySpawnTimer += deltaTime;
+            if (enemySpawnTimer >= enemySpawnInterval) {
+                spawnEnemy();
+                enemySpawnTimer = 0;
+            }
+        } else {
             enemySpawnTimer = 0;
         }
 
@@ -130,6 +138,18 @@ public class GameManager {
                         playerHealth -= 1;
                         camera.shake(5, 0.3);
                     }
+                }
+            }
+        }
+
+        if (boss != null && boss.isAlive()) {
+            boss.update(deltaTime, squad.getMainPosition(), this);
+            if (!godMode) {
+                Vector2D playerPos = squad.getMainPosition();
+                double distance = playerPos.distanceTo(boss.getPosition());
+                if (distance < boss.getRadius() + 12) {
+                    playerHealth = Math.max(0, playerHealth - 1);
+                    camera.shake(4, 0.2);
                 }
             }
         }
@@ -150,6 +170,7 @@ public class GameManager {
 
         updateBullets();
         updateGrenades(deltaTime);
+        updateBossProjectiles(deltaTime);
         updateParticles(deltaTime);
         updateBonuses(deltaTime);
         updateObstacles();
@@ -194,6 +215,21 @@ public class GameManager {
                 }
             }
 
+            if (!bulletRemoved && boss != null && boss.isAlive()) {
+                double distance = boss.getPosition().distanceTo(bullet.getPosition());
+                if (distance < boss.getRadius() + 4) {
+                    applyDamageToBoss(boss, bullet.getDamage());
+                    if (explosiveShotsActive) {
+                        explodeAt(bullet.getPosition(),
+                                EXPLOSIVE_SHOT_RADIUS + explosionRadiusBonus,
+                                EXPLOSIVE_SHOT_DAMAGE + bulletDamageBonus,
+                                true, 6, 0.3);
+                    }
+                    bulletIterator.remove();
+                    bulletRemoved = true;
+                }
+            }
+
             if (!bulletRemoved && !bullet.isActive()) {
                 bulletIterator.remove();
             }
@@ -210,6 +246,58 @@ public class GameManager {
                         BASE_GRENADE_DAMAGE,
                         true, 10, 0.5);
                 grenadeIterator.remove();
+            }
+        }
+    }
+
+    private void updateBossProjectiles(double deltaTime) {
+        if (bossProjectiles == null || bossProjectiles.isEmpty()) return;
+
+        Iterator<BossProjectile> iter = bossProjectiles.iterator();
+        while (iter.hasNext()) {
+            BossProjectile projectile = iter.next();
+            boolean remove = projectile.update(deltaTime, obstacles);
+
+            if (projectile.shouldExplode()) {
+                explodeAt(projectile.getPosition(),
+                        projectile.getExplosionRadius(),
+                        projectile.getDamage(),
+                        true, 8, 0.4);
+            } else if (!remove && projectile.getKind() == BossProjectile.Kind.BULLET) {
+                if (!godMode) {
+                    double minDistance = Double.POSITIVE_INFINITY;
+                    for (PlayerSoldier soldier : squad.getSoldiers()) {
+                        double distance = soldier.getPosition().distanceTo(projectile.getPosition());
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                        }
+                    }
+                    if (minDistance <= projectile.getRadius() + 8) {
+                        playerHealth = Math.max(0, playerHealth - projectile.getDamage());
+                        remove = true;
+                    }
+                }
+            } else if (!remove && projectile.getKind() == BossProjectile.Kind.SHELL) {
+                if (!godMode) {
+                    double minDistance = Double.POSITIVE_INFINITY;
+                    for (PlayerSoldier soldier : squad.getSoldiers()) {
+                        double distance = soldier.getPosition().distanceTo(projectile.getPosition());
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                        }
+                    }
+                    if (minDistance <= projectile.getRadius() + 10) {
+                        explodeAt(projectile.getPosition(),
+                                projectile.getExplosionRadius(),
+                                projectile.getDamage(),
+                                true, 10, 0.5);
+                        remove = true;
+                    }
+                }
+            }
+
+            if (remove) {
+                iter.remove();
             }
         }
     }
@@ -300,6 +388,13 @@ public class GameManager {
         enemies.add(enemy);
     }
 
+    public void spawnEnemyAt(double x, double y) {
+        double speed = randomRange(levelConfig.enemySpeedMin, levelConfig.enemySpeedMax);
+        int health = randomIntRange(levelConfig.enemyHealthMin, levelConfig.enemyHealthMax);
+        Enemy enemy = new Enemy(x, y, speed, health);
+        enemies.add(enemy);
+    }
+
     private void shoot() {
         int damage = BASE_BULLET_DAMAGE + bulletDamageBonus;
         for (PlayerSoldier soldier : squad.getSoldiers()) {
@@ -340,6 +435,14 @@ public class GameManager {
             }
         }
 
+        if (boss != null && boss.isAlive()) {
+            double distance = boss.getPosition().distanceTo(position);
+            if (distance <= radius + boss.getRadius()) {
+                int scaled = scaleDamage(damage, distance, radius);
+                applyDamageToBoss(boss, scaled);
+            }
+        }
+
         if (affectPlayer && !godMode) {
             double minDistance = Double.POSITIVE_INFINITY;
             for (PlayerSoldier soldier : squad.getSoldiers()) {
@@ -366,6 +469,21 @@ public class GameManager {
         if (enemy.takeDamage(damage)) {
             onEnemyKilled(enemy);
         }
+    }
+
+    private void applyDamageToBoss(Boss boss, int damage) {
+        if (boss == null || !boss.isAlive()) return;
+        boss.takeDamage(damage);
+        if (!boss.isAlive()) {
+            onBossKilled(boss);
+        }
+    }
+
+    private void onBossKilled(Boss boss) {
+        createExplosionEffect(boss.getPosition(), new Color(255, 180, 80), 40);
+        camera.shake(14, 0.8);
+        score += 1000;
+        killsThisLevel = killsToAdvance;
     }
 
     private void onEnemyKilled(Enemy enemy) {
@@ -434,12 +552,22 @@ public class GameManager {
             enemy.draw(g2d, camera, showPaths);
         }
 
+        if (boss != null && boss.isAlive()) {
+            boss.draw(g2d, camera);
+        }
+
         for (Bullet bullet : bullets) {
             bullet.draw(g2d, camera);
         }
 
         for (Grenade grenade : grenades) {
             grenade.draw(g2d, camera);
+        }
+
+        if (bossProjectiles != null) {
+            for (BossProjectile projectile : bossProjectiles) {
+                projectile.draw(g2d, camera);
+            }
         }
 
         for (Particle particle : particles) {
@@ -478,6 +606,24 @@ public class GameManager {
         }
         if (explosiveShotsTimer > 0) {
             g2d.drawString("Explosive: " + formatTime(explosiveShotsTimer), 16, 170);
+        }
+
+        if (boss != null && boss.isAlive()) {
+            int barWidth = 240;
+            int barHeight = 12;
+            int x = (screenWidth - barWidth) / 2;
+            int y = 10;
+            double ratio = boss.getMaxHealth() > 0 ? (boss.getHealth() / (double) boss.getMaxHealth()) : 0;
+
+            g2d.setColor(new Color(0, 0, 0, 180));
+            g2d.fillRect(x - 2, y - 2, barWidth + 4, barHeight + 20);
+            g2d.setColor(Color.DARK_GRAY);
+            g2d.fillRect(x, y, barWidth, barHeight);
+            g2d.setColor(new Color(200, 80, 80));
+            g2d.fillRect(x, y, (int) (barWidth * ratio), barHeight);
+            g2d.setColor(Color.WHITE);
+            g2d.setFont(new Font("Arial", Font.BOLD, 12));
+            g2d.drawString("BOSS: " + boss.getName(), x, y + 24);
         }
         if (godMode) {
             g2d.setColor(new Color(255, 255, 100));
@@ -553,6 +699,19 @@ public class GameManager {
         grenadeCooldownTimer = BASE_GRENADE_COOLDOWN;
     }
 
+    public void addBossProjectile(BossProjectile projectile) {
+        if (projectile == null) return;
+        bossProjectiles.add(projectile);
+    }
+
+    public int getWorldWidth() {
+        return worldWidth;
+    }
+
+    public int getWorldHeight() {
+        return worldHeight;
+    }
+
     public boolean isGameOver() {
         return playerHealth <= 0;
     }
@@ -574,7 +733,11 @@ public class GameManager {
         levelConfig = config;
         enemySpawnInterval = config.spawnInterval;
         killsThisLevel = 0;
-        killsToAdvance = 8 + level * 4;
+        if (config.bossLevel) {
+            killsToAdvance = 1;
+        } else {
+            killsToAdvance = 8 + level * 4;
+        }
         levelBannerTimer = 2.0;
 
         enemySpawnTimer = 0;
@@ -585,12 +748,25 @@ public class GameManager {
         enemies.clear();
         bullets.clear();
         grenades.clear();
+        bossProjectiles.clear();
         particles.clear();
         bonuses.clear();
         obstacles.clear();
 
         grid = new Grid(worldWidth, worldHeight, CELL_SIZE);
         generateObstacles(config);
+
+        boss = null;
+        bossLevel = false;
+        if (config.bossLevel) {
+            bossLevel = true;
+            if (config.theme == LevelTheme.BOSS_TANK) {
+                boss = new TankBoss(worldWidth / 2.0, worldHeight / 2.0 - 120,
+                        config.bossHealth, config.bossSpeed);
+            } else if (config.theme == LevelTheme.BOSS_HELI) {
+                boss = new HelicopterBoss(worldWidth / 2.0, 90, config.bossHealth);
+            }
+        }
         resetFog();
 
         if (resetPlayer) {
@@ -706,9 +882,20 @@ public class GameManager {
     }
 
     private LevelConfig buildLevelConfig(int level) {
-        LevelTheme theme = LevelTheme.values()[(level - 1) % LevelTheme.values().length];
         LevelConfig config = new LevelConfig();
+        LevelTheme theme;
+        if (level % 6 == 3) {
+            theme = LevelTheme.BOSS_TANK;
+        } else if (level % 6 == 0) {
+            theme = LevelTheme.BOSS_HELI;
+        } else {
+            LevelTheme[] normalThemes = {LevelTheme.SPARSE, LevelTheme.DENSE, LevelTheme.HUGE, LevelTheme.MAZE};
+            int index = (level - 1) % normalThemes.length;
+            theme = normalThemes[index];
+        }
+
         config.theme = theme;
+        config.bossLevel = theme == LevelTheme.BOSS_TANK || theme == LevelTheme.BOSS_HELI;
 
         config.spawnInterval = Math.max(0.4, 1.0 - level * 0.05);
         config.enemySpeedMin = 1.0 + level * 0.05;
@@ -766,6 +953,33 @@ public class GameManager {
             config.boxHealthMin = 120;
             config.boxHealthMax = 180;
             config.mazeFillChance = 0.7;
+        } else if (theme == LevelTheme.BOSS_TANK) {
+            config.wallCountMin = 2;
+            config.wallCountMax = 3;
+            config.wallLengthMin = 3;
+            config.wallLengthMax = 5;
+            config.singleBoxesMin = 6;
+            config.singleBoxesMax = 10;
+            config.boxSizeMin = 40;
+            config.boxSizeMax = 60;
+            config.boxHealthMin = 140;
+            config.boxHealthMax = 220;
+            config.spawnInterval = 9999;
+            config.bossHealth = 900 + level * 60;
+            config.bossSpeed = 0.6 + level * 0.02;
+        } else if (theme == LevelTheme.BOSS_HELI) {
+            config.wallCountMin = 1;
+            config.wallCountMax = 2;
+            config.wallLengthMin = 2;
+            config.wallLengthMax = 4;
+            config.singleBoxesMin = 4;
+            config.singleBoxesMax = 7;
+            config.boxSizeMin = 40;
+            config.boxSizeMax = 55;
+            config.boxHealthMin = 120;
+            config.boxHealthMax = 180;
+            config.spawnInterval = 9999;
+            config.bossHealth = 750 + level * 50;
         }
 
         return config;
@@ -891,7 +1105,9 @@ public class GameManager {
         SPARSE,
         DENSE,
         HUGE,
-        MAZE
+        MAZE,
+        BOSS_TANK,
+        BOSS_HELI
     }
 
     private static class LevelConfig {
@@ -912,5 +1128,8 @@ public class GameManager {
         int enemyHealthMin;
         int enemyHealthMax;
         double mazeFillChance = 0.0;
+        boolean bossLevel = false;
+        int bossHealth = 800;
+        double bossSpeed = 0.6;
     }
 }

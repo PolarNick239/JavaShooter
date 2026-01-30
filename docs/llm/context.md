@@ -10,6 +10,7 @@ Core entities
 - Enemy -> pathfinds to player via Grid + Pathfinder
 - Bullet -> simple projectile, damages Enemy / Obstacle
 - Grenade -> throwable explosive with cooldown/limit
+- Boss (Tank/Helicopter) -> special levels with patterns and own projectiles
 - Bonus -> drops on enemy death (health or new soldier)
 - Obstacle -> destructible boxes, registered in Grid
 - Particle -> explosion effect
