@@ -241,10 +241,7 @@ public class GameManager {
         while (grenadeIterator.hasNext()) {
             Grenade grenade = grenadeIterator.next();
             if (grenade.update(deltaTime, obstacles)) {
-                explodeAt(grenade.getPosition(),
-                        BASE_GRENADE_RADIUS + explosionRadiusBonus,
-                        BASE_GRENADE_DAMAGE,
-                        true, 10, 0.5);
+                explodeGrenadeAt(grenade.getPosition());
                 grenadeIterator.remove();
             }
         }
@@ -415,6 +412,16 @@ public class GameManager {
         applyExplosionDamage(position, radius, damage, affectPlayer);
     }
 
+    private void explodeGrenadeAt(Vector2D position) {
+        double radius = BASE_GRENADE_RADIUS + explosionRadiusBonus;
+        int damage = BASE_GRENADE_DAMAGE;
+
+        createExplosionEffect(position, new Color(255, 60, 60), 40, 8, 18, 3, 10);
+        createExplosionEffect(position, new Color(255, 140, 90), 18, 4, 10, 2, 7);
+        camera.shake(12, 0.6);
+        applyExplosionDamage(position, radius, damage, true);
+    }
+
     private void applyExplosionDamage(Vector2D position, double radius, int damage, boolean affectPlayer) {
         for (Enemy enemy : enemies) {
             if (!enemy.isAlive()) continue;
@@ -501,11 +508,18 @@ public class GameManager {
     }
 
     private void createExplosionEffect(Vector2D position, Color color, int count) {
+        createExplosionEffect(position, color, count, 3, 8, 2, 8);
+    }
+
+    private void createExplosionEffect(Vector2D position, Color color, int count,
+                                       double sizeMin, double sizeMax, double speedMin, double speedMax) {
         for (int i = 0; i < count; i++) {
             particles.add(new Particle(
                     position.x,
                     position.y,
-                    color
+                    color,
+                    sizeMin, sizeMax,
+                    speedMin, speedMax
             ));
         }
     }
